@@ -72,6 +72,34 @@ api.delete<T>(path, init?)
 
 ---
 
+### React Query integration
+
+Every request method has a `.query()` variant that returns `{ queryKey, queryFn }` compatible with TanStack Query's `useQuery`:
+
+```ts
+import { useQuery } from "@tanstack/react-query";
+import { auri } from "@maguya/auri";
+
+const api = auri().baseUrl("https://api.example.com");
+
+// Basic usage
+const { data } = useQuery(api.get.query<User[]>("/users"));
+
+// With search params
+const { data } = useQuery(
+    api.addSearchParams({ page: "1" }).get.query<User[]>("/users")
+);
+
+// POST with body (queryKey includes the body)
+const { data } = useQuery(
+    api.post.query<Report, Filter>("/reports", { status: "active" })
+);
+```
+
+`queryKey` is derived automatically from `baseUrl + path + searchParams` (and body for methods that accept one), so React Query's cache works correctly out of the box.
+
+---
+
 ### Dynamic headers (e.g. auth tokens)
 
 Pass a function to `.headers()` — it is called fresh on every request:

@@ -27,6 +27,21 @@ type ResponseTypeResult<T, R extends AuriResponseType> = R extends "json"
                     ? FormData
                     : never;
 
+export type QueryOptions<T> = {
+    queryKey: unknown[];
+    queryFn: () => Promise<T>;
+};
+
+type GetFn<R extends AuriResponseType> = {
+    <T>(path: string, init?: AuriRequestInit): Promise<ResponseTypeResult<T, R>>;
+    query: <T>(path: string, init?: AuriRequestInit) => QueryOptions<ResponseTypeResult<T, R>>;
+};
+
+type BodyFn<R extends AuriResponseType> = {
+    <T, B = unknown>(path: string, body?: B, init?: AuriRequestInit): Promise<ResponseTypeResult<T, R>>;
+    query: <T, B = unknown>(path: string, body?: B, init?: AuriRequestInit) => QueryOptions<ResponseTypeResult<T, R>>;
+};
+
 type AuriContext<R extends AuriResponseType> = {
     baseUrl: string;
     responseType: R;
@@ -48,11 +63,11 @@ type AuriInstance<R extends AuriResponseType> = {
     addAfterRequest(handler: (response: Response) => Response | void): AuriInstance<R>;
     setAbortController(controller: AbortController): AuriInstance<R>;
 
-    get<T>(path: string, init?: AuriRequestInit): Promise<ResponseTypeResult<T, R>>;
-    post<T, B = unknown>(path: string, body?: B, init?: AuriRequestInit): Promise<ResponseTypeResult<T, R>>;
-    put<T, B = unknown>(path: string, body?: B, init?: AuriRequestInit): Promise<ResponseTypeResult<T, R>>;
-    patch<T, B = unknown>(path: string, body?: B, init?: AuriRequestInit): Promise<ResponseTypeResult<T, R>>;
-    delete<T>(path: string, init?: AuriRequestInit): Promise<ResponseTypeResult<T, R>>;
+    get: GetFn<R>;
+    post: BodyFn<R>;
+    put: BodyFn<R>;
+    patch: BodyFn<R>;
+    delete: GetFn<R>;
 };
 
 function resolveHeaders(sources: HeadersInput[]): Headers {
@@ -78,11 +93,11 @@ function createInstance<R extends AuriResponseType>(ctx: AuriContext<R>): AuriIn
 
     async function handleResponse<T>(response: Response): Promise<ResponseTypeResult<T, R>> {
         switch (ctx.responseType) {
-            case "json":        return response.json()       as Promise<ResponseTypeResult<T, R>>;
-            case "text":        return response.text()       as Promise<ResponseTypeResult<T, R>>;
-            case "blob":        return response.blob()       as Promise<ResponseTypeResult<T, R>>;
-            case "arrayBuffer": return response.arrayBuffer() as Promise<ResponseTypeResult<T, R>>;
-            case "formData":    return response.formData()   as Promise<ResponseTypeResult<T, R>>;
+            case "json":        return await response.json()        as ResponseTypeResult<T, R>;
+            case "text":        return await response.text()        as ResponseTypeResult<T, R>;
+            case "blob":        return await response.blob()        as ResponseTypeResult<T, R>;
+            case "arrayBuffer": return await response.arrayBuffer() as ResponseTypeResult<T, R>;
+            case "formData":    return await response.formData()    as ResponseTypeResult<T, R>;
             default: throw new Error(`Unknown responseType: ${ctx.responseType}`);
         }
     }
@@ -119,7 +134,33 @@ function createInstance<R extends AuriResponseType>(ctx: AuriContext<R>): AuriIn
         return handleResponse<T>(response);
     }
 
-    const instance: AuriInstance<R> = {
+    function makeQueryKey(path: string, body?: unknown): unknown[] {
+        const params = ctx.searchParams.toString();
+        const url = ctx.baseUrl + path + (params ? "?" + params : "");
+        return body !== undefined ? [url, body] : [url];
+    }
+
+    function makeGetFn(method: "get" | "delete"): GetFn<R> {
+        const fn = <T>(path: string, init?: AuriRequestInit) =>
+            request<T, undefined>(path, method, undefined, init);
+        fn.query = <T>(path: string, init?: AuriRequestInit): QueryOptions<ResponseTypeResult<T, R>> => ({
+            queryKey: makeQueryKey(path),
+            queryFn: () => request<T, undefined>(path, method, undefined, init),
+        });
+        return fn as GetFn<R>;
+    }
+
+    function makeBodyFn(method: "post" | "put" | "patch"): BodyFn<R> {
+        const fn = <T, B = unknown>(path: string, body?: B, init?: AuriRequestInit) =>
+            request<T, B>(path, method, body, init);
+        fn.query = <T, B = unknown>(path: string, body?: B, init?: AuriRequestInit): QueryOptions<ResponseTypeResult<T, R>> => ({
+            queryKey: makeQueryKey(path, body),
+            queryFn: () => request<T, B>(path, method, body, init),
+        });
+        return fn as BodyFn<R>;
+    }
+
+    return {
         baseUrl: (url) => clone({ baseUrl: url }),
 
         headers: (input) =>
@@ -153,14 +194,12 @@ function createInstance<R extends AuriResponseType>(ctx: AuriContext<R>): AuriIn
         setAbortController: (controller) =>
             clone({ abortController: controller }),
 
-        get:    (path, init)        => request(path, "get",    undefined, init),
-        delete: (path, init)        => request(path, "delete", undefined, init),
-        post:   (path, body, init)  => request(path, "post",   body,      init),
-        put:    (path, body, init)  => request(path, "put",    body,      init),
-        patch:  (path, body, init)  => request(path, "patch",  body,      init),
-    };
-
-    return instance;
+        get:    makeGetFn("get"),
+        delete: makeGetFn("delete"),
+        post:   makeBodyFn("post"),
+        put:    makeBodyFn("put"),
+        patch:  makeBodyFn("patch"),
+    } satisfies AuriInstance<R>;
 }
 
 export function auri(): AuriInstance<"json"> {
