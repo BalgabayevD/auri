@@ -1,7 +1,7 @@
 {
-  "name": "auri",
+  "name": "@maguya/auri",
   "version": "0.1.0",
-  "description": "Fluent HTTP client for the browser",
+  "description": "Fluent chainable HTTP client based on the Fetch API",
   "author": "BalgabayevD",
   "license": "MIT",
   "type": "module",
