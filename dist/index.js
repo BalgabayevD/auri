@@ -20,15 +20,15 @@ function createInstance(ctx) {
   async function handleResponse(response) {
     switch (ctx.responseType) {
       case "json":
-        return response.json();
+        return await response.json();
       case "text":
-        return response.text();
+        return await response.text();
       case "blob":
-        return response.blob();
+        return await response.blob();
       case "arrayBuffer":
-        return response.arrayBuffer();
+        return await response.arrayBuffer();
       case "formData":
-        return response.formData();
+        return await response.formData();
       default:
         throw new Error(`Unknown responseType: ${ctx.responseType}`);
     }
@@ -53,7 +53,28 @@ function createInstance(ctx) {
     }
     return handleResponse(response);
   }
-  const instance = {
+  function makeQueryKey(path, body) {
+    const params = ctx.searchParams.toString();
+    const url = ctx.baseUrl + path + (params ? "?" + params : "");
+    return body !== void 0 ? [url, body] : [url];
+  }
+  function makeGetFn(method) {
+    const fn = (path, init) => request(path, method, void 0, init);
+    fn.query = (path, init) => ({
+      queryKey: makeQueryKey(path),
+      queryFn: () => request(path, method, void 0, init)
+    });
+    return fn;
+  }
+  function makeBodyFn(method) {
+    const fn = (path, body, init) => request(path, method, body, init);
+    fn.query = (path, body, init) => ({
+      queryKey: makeQueryKey(path, body),
+      queryFn: () => request(path, method, body, init)
+    });
+    return fn;
+  }
+  return {
     baseUrl: (url) => clone({ baseUrl: url }),
     headers: (input) => clone({ headerSources: [...ctx.headerSources, input] }),
     responseType: (type) => clone({ responseType: type }),
@@ -75,13 +96,12 @@ function createInstance(ctx) {
       return clone({ afterRequest: newSet });
     },
     setAbortController: (controller) => clone({ abortController: controller }),
-    get: (path, init) => request(path, "get", void 0, init),
-    delete: (path, init) => request(path, "delete", void 0, init),
-    post: (path, body, init) => request(path, "post", body, init),
-    put: (path, body, init) => request(path, "put", body, init),
-    patch: (path, body, init) => request(path, "patch", body, init)
+    get: makeGetFn("get"),
+    delete: makeGetFn("delete"),
+    post: makeBodyFn("post"),
+    put: makeBodyFn("put"),
+    patch: makeBodyFn("patch")
   };
-  return instance;
 }
 function auri() {
   return createInstance({
