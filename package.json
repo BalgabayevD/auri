@@ -1,6 +1,6 @@
 {
   "name": "@maguya/auri",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Fluent chainable HTTP client based on the Fetch API",
   "author": "BalgabayevD",
   "license": "MIT",
