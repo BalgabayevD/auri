@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./assets/logo.png" alt="auri" width="200" />
+  <img src="https://open.object.pscloud.io/logo.png" alt="auri" width="200" />
 </p>
 
 # Auri
